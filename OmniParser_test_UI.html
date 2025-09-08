@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OmniParser Test Screen</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --accent: #22d3ee;
+      --accent-2: #a78bfa;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --ok: #34d399;
+      --danger: #f87171;
+      --border: #1f2937;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 1200px at 20% 0%, #0b1229, var(--bg));
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 880px;
+      margin: 56px auto;
+      padding: 32px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: 0.5px;
+    }
+    .subtitle {
+      margin: 0 0 28px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      padding: 18px;
+      border-radius: 16px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+      min-height: 140px;
+    }
+
+    label.block {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      letter-spacing: 0.4px;
+    }
+
+    input[type="text"], select, textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--accent);
+      outline: none;
+      background: #0b1220;
+      color: var(--text);
+      font-size: 16px;
+      box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+      resize: vertical;
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .radio {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px dashed var(--accent-2);
+      border-radius: 12px;
+      background: rgba(167, 139, 250, 0.08);
+    }
+
+    .radio input { transform: scale(1.2); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: linear-gradient(180deg, #1d2a44, #142038);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(23, 162, 184, 0.25);
+    }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(52, 211, 153, 0.15);
+      border: 1px solid var(--ok);
+      color: var(--ok);
+      margin-left: 8px;
+    }
+
+    .role-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      margin-left: 8px;
+      color: var(--text);
+    }
+
+    .big-label {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #ffffffcc;
+      margin-bottom: 8px;
+    }
+
+    :focus-visible { outline: 3px solid var(--danger); outline-offset: 2px; }
+
+    .confirmation {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--ok);
+      font-weight: 600;
+      display: none;
+    }
+
+    @media (max-width: 720px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" role="main" aria-label="OmniParser Demo Form">
+    <h1>OmniParser Test Screen <span class="badge">Static UI</span></h1>
+    <p class="subtitle">A minimal page with clear, high-contrast widgets so vision-based parsers can detect <em>Textbox</em>, <em>Radio</em>, <em>Button</em>, and <em>Textarea</em> reliably.</p>
+
+    <div class="grid">
+      <!-- Textbox Card -->
+      <section class="card" aria-labelledby="lbl-textbox" data-role="textbox-card">
+        <div class="big-label" id="lbl-textbox">TEXTBOX</div>
+        <label class="block" for="nameField">Name</label>
+        <input id="nameField" name="name" type="text" placeholder="Type your name" aria-label="Name Textbox" data-role="textbox" />
+      </section>
+
+      <!-- Radio Group Card -->
+      <section class="card" aria-labelledby="lbl-radio" data-role="radio-card">
+        <div class="big-label" id="lbl-radio">RADIO</div>
+        <label class="block">Preferred Contact</label>
+        <div class="radio-group" role="radiogroup" aria-label="Preferred Contact Radios">
+          <label class="radio" data-role="radio-option"><input type="radio" name="contact" value="email" aria-label="Email Radio" /> Email</label>
+          <label class="radio" data-role="radio-option"><input type="radio" name="contact" value="phone" aria-label="Phone Radio" /> Phone</label>
+        </div>
+      </section>
+
+      <!-- Textarea Card (Replaced Dropdown) -->
+      <section class="card" aria-labelledby="lbl-textarea" data-role="textarea-card">
+        <div class="big-label" id="lbl-textarea">TEXTAREA</div>
+        <label class="block" for="messageField">Message (Multiline Input)</label>
+        <textarea id="messageField" name="message" rows="4" placeholder="Type your message here..." aria-label="Message Textarea" data-role="textarea"></textarea>
+      </section>
+
+      <!-- Another Textarea Card -->
+      <section class="card" aria-labelledby="lbl-textarea2" data-role="textarea-card">
+        <div class="big-label" id="lbl-textarea2">TEXTAREA 2</div>
+        <label class="block" for="feedbackField">Feedback</label>
+        <textarea id="feedbackField" name="feedback" rows="4" placeholder="Share your feedback..." aria-label="Feedback Textarea" data-role="textarea"></textarea>
+      </section>
+
+      <!-- Button Card -->
+      <section class="card" aria-labelledby="lbl-button" data-role="button-card">
+        <div class="big-label" id="lbl-button">BUTTON</div>
+        <label class="block">Submit Action</label>
+        <button class="btn" id="submitBtn" aria-label="Submit Button" data-role="button" type="button">Submit</button>
+        <p id="confirmationMsg" class="confirmation">Your form was submitted successfully!</p>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("submitBtn").addEventListener("click", () => {
+      const confirmation = document.getElementById("confirmationMsg");
+      confirmation.style.display = "block";
+    });
+  </script>
+</body>
+</html>
