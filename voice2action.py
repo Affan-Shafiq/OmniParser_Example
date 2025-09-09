@@ -1,6 +1,6 @@
 """
 voice2action.py
-- Record mic audio -> Gemini transcribes -> Gemini returns Autopy + Keyboard code -> we validate + execute it
+- Record mic audio -> Gemini transcribes + generates Autopy + Keyboard code -> we validate + execute it
 """
 from dotenv import load_dotenv
 import os
@@ -10,12 +10,11 @@ import tempfile
 import sounddevice as sd
 import soundfile as sf
 
-# Action libs we will expose to the generated code:
+# Action libs
 import autopy
 import keyboard
 
 # ---- Gemini (new Google Gen AI SDK) ----
-# Audio understanding + Files API usage
 from google import genai
 from google.genai import types as genai_types
 
@@ -44,35 +43,10 @@ def make_gemini_client():
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("Set GEMINI_API_KEY (or GOOGLE_API_KEY) in your environment.")
-    # Client for the Gemini Developer API
-    client = genai.Client(api_key=api_key)
-    return client
-
-def transcribe_with_gemini(client: genai.Client, wav_path: str) -> str:
-    """Upload audio and ask Gemini for a transcript in the original script."""
-    # Upload audio
-    myfile = client.files.upload(file=wav_path)
-
-    prompt = (
-        "You are a speech-to-text transcriber. "
-        "Transcribe the audio exactly as spoken. "
-        "If the spoken language is English, output in English. "
-        "If the spoken language is not English, translate spoken language to English. "
-    )
-
-    resp = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=[prompt, myfile],
-        config=genai_types.GenerateContentConfig(temperature=0.0),
-    )
-
-    transcript = (resp.text or "").strip()
-    print(f"📝 Transcript: {transcript!r}")
-    return transcript
+    return genai.Client(api_key=api_key)
 
 # -----------------------------
-# 3) Hard-coded UI elements (replace later with OmniParser)
-#    Normalized bbox format: [x1, y1, x2, y2] in 0..1 coordinates.
+# 3) Hard-coded UI elements
 # -----------------------------
 UI_ELEMENTS = [
     {"id": 20, "type": "icon", "bbox": [0.2415, 0.3639, 0.4785, 0.4234], "interactivity": True, "content": "Type your name"},
@@ -84,69 +58,68 @@ UI_ELEMENTS = [
 ]
 
 # -----------------------------
-# 4) Ask Gemini to generate Autopy + Keyboard code
+# 4) One-shot Gemini request
 # -----------------------------
-GEN_CODE_SYSTEM_INSTRUCTION = (
-    "You are an automation code generator. "
-    "Return ONLY a Python fenced code block labeled 'python' that can be executed as-is. "
-    "Requirements:\n"
-    "- Use ONLY these libraries: autopy (for mouse) and keyboard (for typing/keys) and time for delays.\n"
-    "- DO NOT use autopy.key.* APIs. Use keyboard.write(...) / keyboard.send('enter') etc for typing.\n"
-    "- Expect a dict named UI_ELEMENTS with normalized bboxes [x1,y1,x2,y2] in [0,1]; "
-    "  to click, convert bbox center to pixels using autopy.screen.size().\n"
-    "- After moving/clicking, wait ~0.3-0.8s before typing/next action for UI stability.\n"
-    "- Be robust: double-click the textbox before typing to ensure focus; "
-    "  after opening dropdown, wait 0.8s, then click the Pakistan option; then click Submit.\n"
-    "- Do not import anything else (no os, sys, subprocess, eval, open, __import__).\n"
-    "- Whenever user commands to switch text input box or area add an extra space."
-    "- To click: first use autopy.mouse.move(x, y), then call autopy.mouse.click().\n"
-    "- Do NOT pass x,y to autopy.mouse.click(); it only takes an optional button argument.\n"
-    "- Print 'Automation done' at the end."
+SYSTEM_PROMPT = (
+    "You are an automation assistant.\n"
+    "Task:\n"
+    "1. First, transcribe the uploaded audio exactly as spoken.\n"
+    "   - If English, keep English.\n"
+    "   - If non-English, translate into English.\n"
+    "   - Return the transcription clearly marked.\n\n"
+    "2. Then, using that transcription and the provided UI_ELEMENTS JSON, "
+    "   generate Python automation code.\n\n"
+    "Automation code rules:\n"
+    "- Use only: autopy (mouse), keyboard (typing), and time (delays).\n"
+    "- No autopy.key APIs. For typing use keyboard.write() / keyboard.send().\n"
+    "- Convert bbox center to pixels with autopy.screen.size().\n"
+    "- Double-click textboxes before typing.\n"
+    "- Wait 0.3–0.8s after actions.\n"
+    "- Print 'Automation done' at the end.\n"
+    "- Return ONLY one fenced Python code block labeled ```python ... ```.\n"
+    "Important safeguard:\n"
+     "When generating code with autopy:\n"
+        "- Always move the mouse first with autopy.mouse.move(x, y).\n"
+        "- Then call autopy.mouse.click(button=autopy.mouse.Button.LEFT, count=1 or 2).\n"
+        "- Do NOT pass x, y to autopy.mouse.click(), because it only accepts (button, count).\n"
+        "- Example:\n"
+            "autopy.mouse.move(x, y)\n"
+            "autopy.mouse.click(autopy.mouse.Button.LEFT, 1)\n"
 )
 
-def build_code_prompt(transcript: str) -> str:
-    return (
-        f"{GEN_CODE_SYSTEM_INSTRUCTION}\n\n"
-        f"User instruction (transcribed): {transcript}\n\n"
-        "UI elements (normalized bboxes JSON):\n"
-        f"{UI_ELEMENTS}\n\n"
-        "Write the code now."
-    )
+def transcribe_and_generate(client: genai.Client, wav_path: str) -> tuple[str, str]:
+    """One Gemini call: transcription + automation code."""
+    myfile = client.files.upload(file=wav_path)
 
-def request_code_from_gemini(client: genai.Client, prompt: str) -> str:
     resp = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents=prompt,
+        contents=[SYSTEM_PROMPT, f"UI elements: {UI_ELEMENTS}", myfile],
         config=genai_types.GenerateContentConfig(temperature=0.2),
     )
+
     raw = resp.text or ""
-    # Extract fenced block correctly
+    # Extract transcript (before code block)
+    transcript_part = re.split(r"```python", raw, 1)[0].strip()
+    transcript = transcript_part.replace("Transcription:", "").strip()
+
+    # Extract code block
     m = re.search(r"```python\s*(.*?)```", raw, flags=re.DOTALL | re.IGNORECASE)
-    if m:
-        code = m.group(1).strip()
-    else:
-        code = raw.strip()
-    if not code:
+    if not m:
         raise RuntimeError("Model did not return Python code.")
-    return code
+    code = m.group(1).strip()
+
+    print(f"📝 Transcript: {transcript!r}")
+    return transcript, code
 
 # -----------------------------
 # 5) Minimal sandboxing & execution
 # -----------------------------
-ALLOWED_IMPORTS = {"autopy", "keyboard", "time"}
-
 def is_code_safe(code):
-    BLOCKED_PATTERNS = [
-        "import os",
-        "import subprocess",
-        "open(",
-        "eval(",
-        "exec(",
-    ]
-    for pat in BLOCKED_PATTERNS:
+    BLOCKED = ["import os", "import subprocess", "open(", "eval(", "exec("]
+    for pat in BLOCKED:
         if pat in code:
-            return False, f"Blocked pattern found: {pat}"
-    return True, "Code is safe"
+            return False, f"Blocked pattern: {pat}"
+    return True, "Code safe"
 
 HELPERS = """
 # --- helpers injected by the runner ---
@@ -161,15 +134,8 @@ def bbox_to_center(b):
 def run_generated_code(code: str):
     safe, msg = is_code_safe(code)
     if not safe:
-        raise RuntimeError(f"Refusing to execute untrusted code: {msg}")
-    # Build the execution environment
-    g = {
-        "autopy": autopy,
-        "keyboard": keyboard,
-        "time": time,
-        "UI_ELEMENTS": UI_ELEMENTS,
-    }
-    # Prepend helpers so generated code can call bbox_to_center and use screen size.
+        raise RuntimeError(f"Unsafe code: {msg}")
+    g = {"autopy": autopy, "keyboard": keyboard, "time": time, "UI_ELEMENTS": UI_ELEMENTS}
     full_code = HELPERS + "\n\n" + code
     print("▶️ Executing generated code...")
     exec(full_code, g, None)
@@ -182,11 +148,8 @@ def main():
         wav_path = os.path.join(td, "user_command.wav")
         record_audio_wav(wav_path, seconds=25)
         client = make_gemini_client()
-        transcript = transcribe_with_gemini(client, wav_path)
 
-        prompt = build_code_prompt(transcript)
-        print("🧠 Requesting automation code from Gemini…")
-        code = request_code_from_gemini(client, prompt)
+        transcript, code = transcribe_and_generate(client, wav_path)
 
         print("----- GENERATED CODE START -----")
         print(code)
